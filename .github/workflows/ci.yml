@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Windows x64 checks
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+          targets: x86_64-pc-windows-msvc
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Check lints
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Run Rust unit tests
+        run: cargo test --locked
+
+      - name: Test release tag validation
+        run: python scripts/test_release_tag.py
+
+      - name: Build debug server
+        run: cargo build --locked
+
+      - name: Test protocol and missing-Everything hints with synthetic fixtures
+        env:
+          REVERYTHING_INSTANCE: reverything-mcp-ci-no-such-instance
+        run: python scripts/smoke_test.py --expect-unavailable

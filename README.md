@@ -150,6 +150,41 @@ python scripts/package_release.py
 
 `bin/es-manifest.json` 记录官方来源、版本和校验值。升级 ES 时需要重新检查许可证、参数解析、JSON 格式和兼容性。
 
+## GitHub Actions 自动检查与发布
+
+项目提供两个工作流：
+
+- `.github/workflows/ci.yml`：推送分支、创建面向 main 的 PR 或手动运行时，在 Windows runner 上检查格式、Clippy、Rust 单元测试、版本标签校验测试，并验证 Everything 不可用时的 MCP 协议和安装提示。
+- `.github/workflows/release.yml`：推送 `v*` 标签时，从标签对应的提交构建 Windows x64 ZIP，验证发布包，然后创建 GitHub Release 并上传 ZIP。普通 main 推送不发布。
+
+两个工作流都不安装 Everything，不依赖个人电脑或个人文件。Rust 测试和版本测试使用虚构数据，MCP 测试只使用生成的夹具和一个不存在的 Everything 实例；有真实 Everything 的集成测试仍在本地运行。发布包只上传 ZIP，不上传测试目录、日志或整个工作区。
+
+### 发布步骤
+
+1. 先将工作流合入 main，并确保仓库 Settings → Actions → General 已允许 GitHub Actions 运行。
+2. 修改 `Cargo.toml` 版本并更新 `Cargo.lock`（首发当前版本 `0.1.0` 无需修改），测试、提交并推送到 main。
+3. 在对应提交创建并推送标签：
+
+   ```bash
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+4. 在 GitHub 的 Actions 页面查看 Release 工作流，完成后在 Releases 下载 `reverything-mcp-0.1.0-windows-x64.zip`。
+
+**推送版本标签会触发公开发布。** 标签必须与 `Cargo.toml` 的版本完全一致，且对应提交已经合入 main。例如 `v0.2.0-rc.1` 对应 `0.2.0-rc.1`，会自动标记为预发布；普通版本创建正式 Release。
+
+工作流使用仓库自带的 `GITHUB_TOKEN`，通常无需额外配置个人令牌。检查和构建任务仅有仓库读取权限，发布任务才申请 `contents: write`；组织策略或仓库权限若禁止写入，需要管理员允许。第三方 Action 已固定到完整提交 SHA。
+
+发布任务先上传到草稿，所有附件成功后再公开；若同名 Release 已存在，则失败而不是覆盖现有附件。失败后如留下草稿，可在 GitHub 中检查并处理，不要重复强制移动已发布的标签。构建与发布之间若标签被移动，工作流也会拒绝发布。
+
+可在本地单独验证标签逻辑（只输出版本，不公开发布）：
+
+```powershell
+python scripts/test_release_tag.py
+python scripts/check_release_tag.py v0.1.0
+```
+
 ## 许可证
 
 项目自身采用 [MIT](LICENSE)。ES 采用 MIT，版权属于 voidtools，完整条款见 [ES-LICENSE.txt](licenses/ES-LICENSE.txt)。`rmcp` 采用 Apache-2.0；其他依赖保留各自许可，见 [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)。Everything 主程序不随本项目分发。

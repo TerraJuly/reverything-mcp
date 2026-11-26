@@ -2,3 +2,5 @@
 /dist/
 /.test-fixtures/
 *.log
+__pycache__/
+*.py[cod]

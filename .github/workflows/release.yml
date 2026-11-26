@@ -1,0 +1,142 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Windows x64 release
+    if: ${{ !github.event.deleted }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      bundle_name: ${{ steps.version.outputs.bundle_name }}
+      commit: ${{ steps.commit.outputs.sha }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require tagged commit to be merged into main
+        run: git merge-base --is-ancestor HEAD origin/main
+
+      - name: Record the built commit
+        id: commit
+        run: '"sha=$(git rev-parse HEAD)" >> $env:GITHUB_OUTPUT'
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+          targets: x86_64-pc-windows-msvc
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: Validate tag against Cargo.toml
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python scripts/check_release_tag.py
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Check lints
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Run Rust unit tests
+        run: cargo test --locked
+
+      - name: Test release tag validation
+        run: python scripts/test_release_tag.py
+
+      - name: Package x64 server, ES, and licenses
+        run: python scripts/package_release.py
+
+      - name: Test the packaged server without Everything
+        env:
+          BUNDLE_NAME: ${{ steps.version.outputs.bundle_name }}
+          REVERYTHING_INSTANCE: reverything-mcp-ci-no-such-instance
+        run: |
+          Expand-Archive -LiteralPath "dist/${env:BUNDLE_NAME}.zip" -DestinationPath "target/release-smoke"
+          python scripts/smoke_test.py --expect-unavailable "target/release-smoke/${env:BUNDLE_NAME}/reverything-mcp.exe"
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-x64-release
+          path: dist/*.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-x64-release
+          path: dist
+
+      - name: Create draft with assets, then publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          BUILD_COMMIT: ${{ needs.build.outputs.commit }}
+          IS_PRERELEASE: ${{ needs.build.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          current_commit="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}" --jq '.sha')"
+          if [[ "$current_commit" != "$BUILD_COMMIT" ]]; then
+            printf '%s\n' 'The tag moved after the build; refusing to publish.' >&2
+            exit 1
+          fi
+          cat > release-notes.md <<'NOTES'
+          ## Features
+          - Five read-only MCP tools for file/folder search, exact metadata, syntax, and status.
+          - Structured regex, extension, category, directory, sorting, and pagination filters.
+          - Bundled official ES 1.1.1.40 x64 with its license and Rust dependency notices.
+          - Actionable setup hints when Everything is unavailable.
+
+          ## Requirements
+          - Windows x64.
+          - Install and run Everything separately; the indexing engine is not bundled.
+          - Extract the complete windows-x64 ZIP and follow README.md to configure the MCP client.
+
+          ## Testing
+          Automated tests use synthetic fixtures only. No personal files or metadata are included.
+          CI verifies MCP protocol and missing-client behavior; live Everything integration tests run locally.
+          NOTES
+          args=(--repo "$GITHUB_REPOSITORY" --verify-tag --title "$RELEASE_TAG" --notes-file release-notes.md --draft)
+          if [[ "$IS_PRERELEASE" == 'true' ]]; then
+            args+=(--prerelease)
+          fi
+          gh release create "$RELEASE_TAG" dist/*.zip "${args[@]}"
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
