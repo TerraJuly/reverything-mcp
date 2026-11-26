@@ -150,14 +150,15 @@ python scripts/package_release.py
 
 `bin/es-manifest.json` 记录官方来源、版本和校验值。升级 ES 时需要重新检查许可证、参数解析、JSON 格式和兼容性。
 
-## GitHub Actions 自动检查与发布
+## GitHub Actions 自动发布
 
-项目提供两个工作流：
+代码格式检查、Clippy、单元测试及 MCP 冒烟测试均在本地执行，不配置自动 CI。
 
-- `.github/workflows/ci.yml`：推送分支、创建面向 main 的 PR 或手动运行时，在 Windows runner 上检查格式、Clippy、Rust 单元测试、版本标签校验测试，并验证 Everything 不可用时的 MCP 协议和安装提示。
-- `.github/workflows/release.yml`：推送 `v*` 标签时，从标签对应的提交构建 Windows x64 ZIP，验证发布包，然后创建 GitHub Release 并上传 ZIP。普通 main 推送不发布。
+仅保留 `.github/workflows/release.yml`：推送 `v*` 标签时，从对应提交构建 Windows x64 ZIP，然后创建 GitHub Release 并上传 ZIP。普通分支推送和 PR 不触发工作流。
 
-两个工作流都不安装 Everything，不依赖个人电脑或个人文件。Rust 测试和版本测试使用虚构数据，MCP 测试只使用生成的夹具和一个不存在的 Everything 实例；有真实 Everything 的集成测试仍在本地运行。发布包只上传 ZIP，不上传测试目录、日志或整个工作区。
+发布工作流不运行代码检查或测试，也不安装 Everything；发布前请先在本地完成“开发与测试”章节中的检查。测试只使用虚构数据和生成的夹具，不读取个人文件。发布包只上传 ZIP，不上传测试目录、日志或整个工作区。
+
+版本一致性、提交已合入 main，以及 ES 哈希、架构和许可证校验仍保留，作为打包发布的必要条件。
 
 ### 发布步骤
 
@@ -174,7 +175,7 @@ python scripts/package_release.py
 
 **推送版本标签会触发公开发布。** 标签必须与 `Cargo.toml` 的版本完全一致，且对应提交已经合入 main。例如 `v0.2.0-rc.1` 对应 `0.2.0-rc.1`，会自动标记为预发布；普通版本创建正式 Release。
 
-工作流使用仓库自带的 `GITHUB_TOKEN`，通常无需额外配置个人令牌。检查和构建任务仅有仓库读取权限，发布任务才申请 `contents: write`；组织策略或仓库权限若禁止写入，需要管理员允许。第三方 Action 已固定到完整提交 SHA。
+工作流使用仓库自带的 `GITHUB_TOKEN`，通常无需额外配置个人令牌。构建任务仅有仓库读取权限，发布任务才申请 `contents: write`；组织策略或仓库权限若禁止写入，需要管理员允许。第三方 Action 已固定到完整提交 SHA。
 
 发布任务先上传到草稿，所有附件成功后再公开；若同名 Release 已存在，则失败而不是覆盖现有附件。失败后如留下草稿，可在 GitHub 中检查并处理，不要重复强制移动已发布的标签。构建与发布之间若标签被移动，工作流也会拒绝发布。
 

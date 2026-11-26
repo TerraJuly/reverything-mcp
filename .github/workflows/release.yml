@@ -43,7 +43,6 @@ jobs:
         uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
           toolchain: stable
-          components: rustfmt, clippy
           targets: x86_64-pc-windows-msvc
 
       - name: Set up Python
@@ -58,28 +57,8 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: python scripts/check_release_tag.py
 
-      - name: Check formatting
-        run: cargo fmt --all --check
-
-      - name: Check lints
-        run: cargo clippy --locked --all-targets -- -D warnings
-
-      - name: Run Rust unit tests
-        run: cargo test --locked
-
-      - name: Test release tag validation
-        run: python scripts/test_release_tag.py
-
       - name: Package x64 server, ES, and licenses
         run: python scripts/package_release.py
-
-      - name: Test the packaged server without Everything
-        env:
-          BUNDLE_NAME: ${{ steps.version.outputs.bundle_name }}
-          REVERYTHING_INSTANCE: reverything-mcp-ci-no-such-instance
-        run: |
-          Expand-Archive -LiteralPath "dist/${env:BUNDLE_NAME}.zip" -DestinationPath "target/release-smoke"
-          python scripts/smoke_test.py --expect-unavailable "target/release-smoke/${env:BUNDLE_NAME}/reverything-mcp.exe"
 
       - name: Upload release bundle
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -98,7 +77,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download verified bundle
+      - name: Download release bundle
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: windows-x64-release
@@ -131,8 +110,8 @@ jobs:
           - Extract the complete windows-x64 ZIP and follow README.md to configure the MCP client.
 
           ## Testing
-          Automated tests use synthetic fixtures only. No personal files or metadata are included.
-          CI verifies MCP protocol and missing-client behavior; live Everything integration tests run locally.
+          Code checks and tests run locally using synthetic fixtures only.
+          GitHub Actions builds, packages, and publishes; no personal files or metadata are included.
           NOTES
           args=(--repo "$GITHUB_REPOSITORY" --verify-tag --title "$RELEASE_TAG" --notes-file release-notes.md --draft)
           if [[ "$IS_PRERELEASE" == 'true' ]]; then
