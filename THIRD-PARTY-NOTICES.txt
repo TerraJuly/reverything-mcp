@@ -1,0 +1,16 @@
+ES — The Command Line Interface for Everything
+Version: 1.1.1.40, Windows x64
+Copyright (c) 2025 voidtools
+License: MIT; the complete text is included in licenses/ES-LICENSE.txt.
+Binary: https://www.voidtools.com/ES-1.1.1.40.x64.zip
+Corresponding source: https://www.voidtools.com/ES-1.1.1.40.src.zip
+Repository: https://github.com/voidtools/ES
+The bundled executable is unmodified. It requires Everything to be installed
+and running separately; the Everything application is not bundled.
+
+Rust dependencies
+This project uses rmcp (the official Rust MCP SDK, Apache-2.0) and other Rust
+crates. The release packaging script includes the applicable dependency license
+files and notices under licenses/rust/, with an index in
+licenses/RUST-DEPENDENCIES.txt. This project's MIT license does not replace the
+licenses or copyright notices of its dependencies.

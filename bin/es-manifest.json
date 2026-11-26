@@ -1,0 +1,10 @@
+{
+  "version": "1.1.1.40",
+  "architecture": "x64",
+  "binary_url": "https://www.voidtools.com/ES-1.1.1.40.x64.zip",
+  "source_url": "https://www.voidtools.com/ES-1.1.1.40.src.zip",
+  "archive_sha256": "a4e0f429c03f7b768cf777ad25a55c10c1b82ff06d5cae4ac52925b7b19b16ec",
+  "exe_sha256": "7fadef668b9d1740c58f7e8935e559d7ac89265923969228ab868791b8005731",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2025 voidtools"
+}
